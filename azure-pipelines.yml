@@ -1,0 +1,160 @@
+# Docker
+# Build a Docker image
+# https://docs.microsoft.com/azure/devops/pipelines/languages/docker
+
+# trigger:
+# - master
+
+resources:
+- repo: self
+
+variables:
+  # tag: '$(Build.BuildId)'
+  # tag: 'latest'
+  agent_name: 'myadminuser'
+
+stages:
+- stage: BuildNonProd
+  displayName: Build NonProd Client image
+  jobs:
+  - job: BuildNonProd
+    displayName: Build Non-Prod Client image
+    pool:
+      name: azurevm
+      demands:
+        - agent.name -equals $(agent_name)
+    steps:
+    - task: Docker@2
+      displayName: Build the client image for dev
+      inputs:
+        containerRegistry: 'DockerHub'
+        repository: 'akashskynet009/react-multi-client'
+        command: 'build'
+        Dockerfile: '$(Build.SourcesDirectory)/client/Dockerfile.dev'
+        # buildContext: './client'
+        tags: 'dev_$(Build.BuildId)'
+
+    - task: Bash@3
+      displayName: Test the Image
+      inputs:
+        targetType: 'inline'
+        script: |
+          # Write your commands here
+          
+          # npm install
+          # npm install react-scripts
+          docker run --rm -p 5000:3000 akashskynet009/react-multi-client:dev_$(Build.BuildId) sh -c "npm start & npm test -- --watchAll=false"
+
+    - task: Docker@2
+      displayName: Push the image
+      inputs:
+        containerRegistry: 'DockerHub'
+        repository: 'akashskynet009/react-multi-client'
+        command: 'push'
+        Dockerfile: '$(Build.SourcesDirectory)/client/Dockerfile.dev'
+        # buildContext: './client'
+        tags: 'dev_$(Build.BuildId)'
+
+- stage: BuildProd
+  displayName: Build Prod Client, Nginx, Server, and Worker images
+  jobs:
+  - job: BuildProd
+    displayName: Build Prod images
+    pool:
+      name: azurevm
+      demands:
+        - agent.name -equals $(agent_name)
+    steps:
+    - task: Docker@2
+      displayName: Build and Push the Client image
+      inputs:
+        containerRegistry: 'DockerHub'
+        repository: 'akashskynet009/react-multi-client'
+        command: 'buildAndPush'
+        Dockerfile: '$(Build.SourcesDirectory)/client/Dockerfile'
+        # buildContext: './client'
+        tags: $(Build.BuildId)
+    - task: Docker@2
+      displayName: Build and Push the Nginx image
+      inputs:
+        containerRegistry: 'DockerHub'
+        repository: 'akashskynet009/react-multi-nginx'
+        command: 'buildAndPush'
+        Dockerfile: '$(Build.SourcesDirectory)/nginx/Dockerfile'
+        # buildContext: './nginx'
+        tags: $(Build.BuildId)
+    - task: Docker@2
+      displayName: Build and Push the Server image
+      inputs:
+        containerRegistry: 'DockerHub'
+        repository: 'akashskynet009/react-multi-server'
+        command: 'buildAndPush'
+        Dockerfile: '$(Build.SourcesDirectory)/server/Dockerfile'
+        # buildContext: './server'
+        tags: $(Build.BuildId)
+    - task: Docker@2
+      displayName: Build and Push the Worker image
+      inputs:
+        containerRegistry: 'DockerHub'
+        repository: 'akashskynet009/react-multi-worker'
+        command: 'buildAndPush'
+        Dockerfile: '$(Build.SourcesDirectory)/worker/Dockerfile'
+        # buildContext: './worker'
+        tags: $(Build.BuildId)
+
+
+# - stage: DeployDev
+#   displayName: Deploy to Dev
+#   jobs:
+#   - job: DeployDev
+#     displayName: Deploy to Dev
+#     pool:
+#       name: azurevm
+#       demands:
+#         - agent.name -equals $(agent_name)
+#     steps:
+#     - task: AzureWebAppContainer@1
+#       inputs:
+#         azureSubscription: 'Skynet Subscription'
+#         appName: 'horizonreactdemo-dev'
+#         containers: 'akashskynet009/demo-react-app:$(tag)'
+
+# - stage: DeployTest
+#   displayName: Deploy to Test
+#   jobs:
+#   - job: DeployTest
+#     displayName: Deploy to Test
+#     pool:
+#       name: azurevm
+#       demands:
+#         - agent.name -equals $(agent_name)
+#     steps:
+#     - task: AzureWebAppContainer@1
+#       inputs:
+#         azureSubscription: 'Skynet Subscription'
+#         appName: 'horizonreactdemo-test'
+#         containers: 'akashskynet009/demo-react-app:$(tag)'
+#     - task: oneluckidevWebSmokeTest@1
+#       displayName: Smoke Test
+#       inputs:
+#         url: 'https://horizonreactdemo-test.azurewebsites.net'
+#         expectedReturnCode: '200'
+#         retryAttemptCount: '3'
+#         strictSSL: true
+#         retryDelay: '1000'
+
+# - stage: DeployProd
+#   displayName: Deploy to Prod
+#   jobs:
+#   - job: DeployProd
+#     displayName: Deploy to Prod
+#     pool:
+#       name: azurevm
+#       demands:
+#         - agent.name -equals $(agent_name)
+#     steps:
+#     - task: AzureWebAppContainer@1
+#       inputs:
+#         azureSubscription: 'Skynet Subscription'
+#         appName: 'horizonreactdemo-prod'
+#         containers: 'akashskynet009/demo-react-app:$(tag)'
