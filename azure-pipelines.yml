@@ -10,7 +10,7 @@ resources:
 
 variables:
   # tag: '$(Build.BuildId)'
-  # tag: 'latest'
+  tag: 'latest'
   agent_name: 'myadminuser'
 
 stages:
@@ -20,7 +20,7 @@ stages:
   - job: BuildNonProd
     displayName: Build Non-Prod Client image
     pool:
-      name: azurevm
+      name: docker_agent_pool
       demands:
         - agent.name -equals $(agent_name)
     steps:
@@ -31,8 +31,7 @@ stages:
         repository: 'akashskynet009/react-multi-client'
         command: 'build'
         Dockerfile: '$(Build.SourcesDirectory)/client/Dockerfile.dev'
-        # buildContext: './client'
-        tags: 'dev_$(Build.BuildId)'
+        tags: 'dev_$(tag)'
 
     - task: Bash@3
       displayName: Test the Image
@@ -43,17 +42,28 @@ stages:
           
           # npm install
           # npm install react-scripts
-          docker run --rm -p 5000:3000 akashskynet009/react-multi-client:dev_$(Build.BuildId) sh -c "npm start & npm test -- --watchAll=false"
+          docker run --rm -p 5000:3000 akashskynet009/react-multi-client:dev_$(tag) sh -c "npm start & npm test -- --watchAll=false"
 
-    - task: Docker@2
-      displayName: Push the image
+    # - task: Docker@2
+    #   displayName: Push the image
+    #   inputs:
+    #     containerRegistry: 'DockerHub'
+    #     repository: 'akashskynet009/react-multi-client'
+    #     command: 'push'
+    #     Dockerfile: '$(Build.SourcesDirectory)/client/Dockerfile.dev'
+    #     tags: 'dev_$(tag)'
+
+    - task: AmazonWebServices.aws-vsts-tools.ECRPushImage.ECRPushImage@1
+      displayName: 'Push Image: Client'
       inputs:
-        containerRegistry: 'DockerHub'
-        repository: 'akashskynet009/react-multi-client'
-        command: 'push'
-        Dockerfile: '$(Build.SourcesDirectory)/client/Dockerfile.dev'
-        # buildContext: './client'
-        tags: 'dev_$(Build.BuildId)'
+        awsCredentials: AWS
+        regionName: 'us-west-1'
+        sourceImageName: 'akashskynet009/react-multi-client'
+        sourceImageTag: 'dev_$(tag)'
+        repositoryName: 'react-multi-client'
+        pushTag: 'dev_$(tag)'
+        autoCreateRepository: true
+        forceDockerNamingConventions: true
 
 - stage: BuildProd
   displayName: Build Prod Client, Nginx, Server, and Worker images
@@ -61,100 +71,85 @@ stages:
   - job: BuildProd
     displayName: Build Prod images
     pool:
-      name: azurevm
+      name: docker_agent_pool
       demands:
         - agent.name -equals $(agent_name)
     steps:
     - task: Docker@2
-      displayName: Build and Push the Client image
+      displayName: Build the Client image
       inputs:
         containerRegistry: 'DockerHub'
         repository: 'akashskynet009/react-multi-client'
-        command: 'buildAndPush'
+        command: 'build'
         Dockerfile: '$(Build.SourcesDirectory)/client/Dockerfile'
-        # buildContext: './client'
-        tags: $(Build.BuildId)
+        tags: $(tag)
     - task: Docker@2
-      displayName: Build and Push the Nginx image
+      displayName: Build the Nginx image
       inputs:
         containerRegistry: 'DockerHub'
         repository: 'akashskynet009/react-multi-nginx'
-        command: 'buildAndPush'
+        command: 'build'
         Dockerfile: '$(Build.SourcesDirectory)/nginx/Dockerfile'
-        # buildContext: './nginx'
-        tags: $(Build.BuildId)
+        tags: $(tag)
     - task: Docker@2
-      displayName: Build and Push the Server image
+      displayName: Build the Server image
       inputs:
         containerRegistry: 'DockerHub'
         repository: 'akashskynet009/react-multi-server'
-        command: 'buildAndPush'
+        command: 'build'
         Dockerfile: '$(Build.SourcesDirectory)/server/Dockerfile'
-        # buildContext: './server'
-        tags: $(Build.BuildId)
+        tags: $(tag)
     - task: Docker@2
-      displayName: Build and Push the Worker image
+      displayName: Build the Worker image
       inputs:
         containerRegistry: 'DockerHub'
         repository: 'akashskynet009/react-multi-worker'
-        command: 'buildAndPush'
+        command: 'build'
         Dockerfile: '$(Build.SourcesDirectory)/worker/Dockerfile'
-        # buildContext: './worker'
-        tags: $(Build.BuildId)
+        tags: $(tag)
+    - task: AmazonWebServices.aws-vsts-tools.ECRPushImage.ECRPushImage@1
+      displayName: 'Push Image: Client'
+      inputs:
+        awsCredentials: AWS
+        regionName: 'us-west-1'
+        sourceImageName: 'akashskynet009/react-multi-client'
+        sourceImageTag: '$(tag)'
+        repositoryName: 'react-multi-client'
+        pushTag: '$(tag)'
+        autoCreateRepository: true
+        forceDockerNamingConventions: true
+    - task: AmazonWebServices.aws-vsts-tools.ECRPushImage.ECRPushImage@1
+      displayName: 'Push Image: Nginx'
+      inputs:
+        awsCredentials: AWS
+        regionName: 'us-west-1'
+        sourceImageName: 'akashskynet009/react-multi-nginx'
+        sourceImageTag: '$(tag)'
+        repositoryName: 'react-multi-nginx'
+        pushTag: '$(tag)'
+        autoCreateRepository: true
+        forceDockerNamingConventions: true
+    - task: AmazonWebServices.aws-vsts-tools.ECRPushImage.ECRPushImage@1
+      displayName: 'Push Image: server'
+      inputs:
+        awsCredentials: AWS
+        regionName: 'us-west-1'
+        sourceImageName: 'akashskynet009/react-multi-server'
+        sourceImageTag: '$(tag)'
+        repositoryName: 'react-multi-server'
+        pushTag: '$(tag)'
+        autoCreateRepository: true
+        forceDockerNamingConventions: true
+    - task: AmazonWebServices.aws-vsts-tools.ECRPushImage.ECRPushImage@1
+      displayName: 'Push Image: worker'
+      inputs:
+        awsCredentials: AWS
+        regionName: 'us-west-1'
+        sourceImageName: 'akashskynet009/react-multi-worker'
+        sourceImageTag: '$(tag)'
+        repositoryName: 'react-multi-worker'
+        pushTag: '$(tag)'
+        autoCreateRepository: true
+        forceDockerNamingConventions: true
 
 
-# - stage: DeployDev
-#   displayName: Deploy to Dev
-#   jobs:
-#   - job: DeployDev
-#     displayName: Deploy to Dev
-#     pool:
-#       name: azurevm
-#       demands:
-#         - agent.name -equals $(agent_name)
-#     steps:
-#     - task: AzureWebAppContainer@1
-#       inputs:
-#         azureSubscription: 'Skynet Subscription'
-#         appName: 'horizonreactdemo-dev'
-#         containers: 'akashskynet009/demo-react-app:$(tag)'
-
-# - stage: DeployTest
-#   displayName: Deploy to Test
-#   jobs:
-#   - job: DeployTest
-#     displayName: Deploy to Test
-#     pool:
-#       name: azurevm
-#       demands:
-#         - agent.name -equals $(agent_name)
-#     steps:
-#     - task: AzureWebAppContainer@1
-#       inputs:
-#         azureSubscription: 'Skynet Subscription'
-#         appName: 'horizonreactdemo-test'
-#         containers: 'akashskynet009/demo-react-app:$(tag)'
-#     - task: oneluckidevWebSmokeTest@1
-#       displayName: Smoke Test
-#       inputs:
-#         url: 'https://horizonreactdemo-test.azurewebsites.net'
-#         expectedReturnCode: '200'
-#         retryAttemptCount: '3'
-#         strictSSL: true
-#         retryDelay: '1000'
-
-# - stage: DeployProd
-#   displayName: Deploy to Prod
-#   jobs:
-#   - job: DeployProd
-#     displayName: Deploy to Prod
-#     pool:
-#       name: azurevm
-#       demands:
-#         - agent.name -equals $(agent_name)
-#     steps:
-#     - task: AzureWebAppContainer@1
-#       inputs:
-#         azureSubscription: 'Skynet Subscription'
-#         appName: 'horizonreactdemo-prod'
-#         containers: 'akashskynet009/demo-react-app:$(tag)'
